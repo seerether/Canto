@@ -1,0 +1,29 @@
+func (k Keeper) swapCoins(ctx sdk.Context, sender, recipient sdk.AccAddress, coinSold, coinBought sdk.Coin) error {
+	lptDenom, err := k.GetLptDenomFromDenoms(ctx, coinSold.Denom, coinBought.Denom)
+	if err != nil {
+		return err
+	}
+
+	poolAddr := types.GetReservePoolAddr(lptDenom)
+
+	err = k.bk.WithdrawCoins(ctx, sender, poolAddr, sdk.NewCoins(coinSold))
+	if err != nil {
+		return err
+	}
+
+	if recipient.Empty() {
+		recipient = sender
+	}
+
+	err = k.bk.SendCoins(ctx, poolAddr, recipient, sdk.NewCoins(coinBought))
+	if err != nil {
+		// Rollback the first transfer if the second transfer fails
+		err = k.bk.DepositCoins(ctx, sender, sdk.NewCoins(coinSold))
+		if err != nil {
+			// Handle error while rolling back (e.g., log or panic)
+		}
+		return err
+	}
+
+	return nil
+}
